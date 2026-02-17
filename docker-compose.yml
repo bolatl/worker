@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: jobs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobs"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      HTTP_PORT: "8080"
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/jobs?sslmode=disable"
+      RABBIT_URL: "amqp://guest:guest@rabbitmq:5672/"
+      QUEUE_NAME: "jobs"
+      MAX_ATTEMPTS: "5"
+      PREFETCH: "1"
+      PROCESSING_TIMEOUT: "60s"
+      WORK_DURATION: "2s"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/jobs?sslmode=disable"
+      RABBIT_URL: "amqp://guest:guest@rabbitmq:5672/"
+      QUEUE_NAME: "jobs"
+      MAX_ATTEMPTS: "5"
+      PREFETCH: "1"
+      PROCESSING_TIMEOUT: "60s"
+      WORK_DURATION: "2s"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
