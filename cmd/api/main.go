@@ -1,3 +1,4 @@
+// Command api: HTTP server for creating jobs, fetching job status, and health checks.
 package main
 
 import (
@@ -16,6 +17,7 @@ import (
 	"worker/internal/queue"
 )
 
+// main loads config, connects to DB and RabbitMQ, runs migrations, starts HTTP server, and handles graceful shutdown.
 func main() {
 	ctx := context.Background()
 

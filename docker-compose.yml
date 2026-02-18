@@ -1,32 +1,11 @@
+# Docker Compose definition for the worker project: API, worker, Postgres, and RabbitMQ.
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_DB: jobs
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d jobs"]
-      interval: 3s
-      timeout: 3s
-      retries: 30
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-
+  # API service: HTTP server for job creation and status. Depends on postgres and rabbitmq.
   api:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    environment:
+    environment:  # Override config for containerized run
       HTTP_PORT: "8080"
       DATABASE_URL: "postgres://postgres:postgres@postgres:5432/jobs?sslmode=disable"
       RABBIT_URL: "amqp://guest:guest@rabbitmq:5672/"
@@ -34,7 +13,7 @@ services:
       MAX_ATTEMPTS: "5"
       PREFETCH: "1"
       PROCESSING_TIMEOUT: "60s"
-      WORK_DURATION: "2s"
+      WORK_DURATION: "15s"
     ports:
       - "8080:8080"
     depends_on:
@@ -42,7 +21,9 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    restart: on-failure  # Restart on connection failure (postgres/rabbitmq startup race)
 
+  # Worker service: consumes jobs from RabbitMQ, processes them, runs reaper for stuck jobs.
   worker:
     build:
       context: .
@@ -54,9 +35,35 @@ services:
       MAX_ATTEMPTS: "5"
       PREFETCH: "1"
       PROCESSING_TIMEOUT: "60s"
-      WORK_DURATION: "2s"
+      WORK_DURATION: "15s"
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    restart: on-failure
+
+  # Postgres 16 database. Healthcheck ensures jobs DB is ready before api/worker start.
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: jobs
+    healthcheck:  # api/worker wait for this before starting
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobs"]
+      interval: 3s
+      timeout: 3s
+      retries: 30  # ~90s max wait for postgres to be ready
+
+  # RabbitMQ with management UI. Ports: 5672 (AMQP), 15672 (web UI).
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:  # api/worker wait for this before starting
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30

@@ -1,3 +1,4 @@
+// Package queue provides RabbitMQ connection and publish/consume for job messages.
 package queue
 
 import (
@@ -9,12 +10,14 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// Rabbit holds a RabbitMQ connection, channel, and queue name for job publishing/consuming.
 type Rabbit struct {
 	conn      *amqp.Connection
 	ch        *amqp.Channel
 	queueName string
 }
 
+// Connect dials RabbitMQ, declares a durable queue, and returns a Rabbit client.
 func Connect(url, queueName string) (*Rabbit, error) {
 	if url == "" {
 		return nil, fmt.Errorf("RABBIT_URL is empty")
@@ -48,6 +51,7 @@ func Connect(url, queueName string) (*Rabbit, error) {
 	return &Rabbit{conn: conn, ch: ch, queueName: queueName}, nil
 }
 
+// Close closes the channel and connection.
 func (r *Rabbit) Close() {
 	if r.ch != nil {
 		_ = r.ch.Close()
@@ -57,10 +61,11 @@ func (r *Rabbit) Close() {
 	}
 }
 
+// PublishJob publishes a JobMessage with the given job ID to the queue.
 func (r *Rabbit) PublishJob(ctx context.Context, jobID string) error {
 	body, err := json.Marshal(JobMessage{JobID: jobID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal job message: %w", err)
 	}
 
 	pubCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -80,7 +85,7 @@ func (r *Rabbit) PublishJob(ctx context.Context, jobID string) error {
 	)
 }
 
-// Consume returns deliveries with manual acks.
+// Consume returns a channel of deliveries. Prefetch limits unacked messages. Manual ACK required.
 func (r *Rabbit) Consume(prefetch int) (<-chan amqp.Delivery, error) {
 	if prefetch <= 0 {
 		prefetch = 1

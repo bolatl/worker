@@ -1,0 +1,10 @@
+# Override for faster e2e tests. Use: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# WORK_DURATION=2s reduces job processing from 15s to 2s (happy path ~2s, poison ~10s)
+
+services:
+  api:
+    environment:
+      WORK_DURATION: "2s"
+  worker:
+    environment:
+      WORK_DURATION: "2s"

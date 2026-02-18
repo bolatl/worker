@@ -1,9 +1,11 @@
+// Package api provides HTTP handlers for job creation, retrieval, and health checks.
 package api
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,20 +14,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// Handlers holds dependencies for HTTP request handlers.
 type Handlers struct {
 	svc  *jobs.Service
 	repo *jobs.Repository
 }
 
+// NewHandlers creates Handlers with the given job service and repository.
 func NewHandlers(svc *jobs.Service, repo *jobs.Repository) *Handlers {
 	return &Handlers{svc: svc, repo: repo}
 }
 
+// createJobReq is the JSON body for job creation.
 type createJobReq struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
+// CreateJob handles POST /jobs: creates a job and publishes it to the queue.
 func (h *Handlers) CreateJob(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -52,6 +58,7 @@ func (h *Handlers) CreateJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": id})
 }
 
+// GetJob handles GET /jobs/{id}: returns job details by ID, or 404 if not found.
 func (h *Handlers) GetJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -62,6 +69,7 @@ func (h *Handlers) GetJob(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+			fmt.Fprintln(w, "not found")
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -88,10 +96,12 @@ func (h *Handlers) GetJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// Healthz handles GET /healthz: returns 200 OK for liveness/readiness probes.
 func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// writeJSON sets Content-Type to application/json, writes status, and encodes v as JSON.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

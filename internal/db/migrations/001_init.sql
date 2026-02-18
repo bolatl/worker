@@ -1,7 +1,10 @@
+-- Migration 001: Initial schema for the jobs table.
+-- Enables UUID generation and creates the jobs table with status, attempts, and timestamps.
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS jobs (
-                                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     type TEXT NOT NULL,
     payload JSONB NOT NULL,
 
@@ -19,5 +22,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     processing_started_at TIMESTAMPTZ NULL
     );
 
+-- Index for filtering jobs by status (e.g., reaper query for stuck processing).
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+-- Index for reaper: find jobs stuck in processing beyond timeout.
 CREATE INDEX IF NOT EXISTS idx_jobs_processing_started ON jobs(processing_started_at);

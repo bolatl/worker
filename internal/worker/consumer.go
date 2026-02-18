@@ -11,15 +11,18 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// Consumer reads job messages from a RabbitMQ delivery channel and processes them.
 type Consumer struct {
 	deliveries <-chan amqp.Delivery
 	processor  *Processor
 }
 
+// NewConsumer creates a Consumer that processes deliveries using the given Processor.
 func NewConsumer(deliveries <-chan amqp.Delivery, processor *Processor) *Consumer {
 	return &Consumer{deliveries: deliveries, processor: processor}
 }
 
+// Run starts the consumer loop. Returns when ctx is canceled or the delivery channel is closed.
 func (c *Consumer) Run(ctx context.Context) error {
 	for {
 		select {
@@ -34,6 +37,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
+// handleOne processes a single RabbitMQ delivery: decodes job ID, runs processor, ACKs or NACKs.
 func (c *Consumer) handleOne(ctx context.Context, d amqp.Delivery) {
 	var msg queue.JobMessage
 	if err := json.Unmarshal(d.Body, &msg); err != nil || msg.JobID == "" {

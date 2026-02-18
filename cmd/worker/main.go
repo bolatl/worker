@@ -1,3 +1,4 @@
+// Command worker: consumes jobs from RabbitMQ, processes them, and runs the reaper for stuck jobs.
 package main
 
 import (
@@ -15,6 +16,7 @@ import (
 	"worker/internal/worker"
 )
 
+// main loads config, connects to DB and RabbitMQ, runs migrations, starts consumer and reaper, and handles shutdown.
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
